@@ -169,10 +169,13 @@ app.get('/polls/:pollId', (req, res) => {
     .select({ title: 1, options: 2, userId: 3 })
     .then(doc => {
       if (!doc) {
-        res.status(404).json({ error: 'Poll not found' });
+        res.status(404).send('Poll not found');
       } else {
         res.json(doc);
       }
+    })
+    .catch(err => {
+      res.status(500).send('Internal Server Error');
     });
 });
 
@@ -194,7 +197,44 @@ app.post('/create-poll', isAuthenticated, function(req, res) {
       res.status(200).send("successfully created new poll");
     }
   })
+});
+
+app.put('/vote/:pollId', function (req, res) {
+  let pollId = req.params.pollId;
+  let options = req.body.options;
+  delete req.body._id;
+  updatePollById(pollId, req.body, res);
 })
+
+app.delete('/delete-poll/:pollId', function (req, res) {
+  let pollId = req.params.pollId;
+  Polls
+    .findOne({ _id : pollId })
+    .remove()
+    .exec()
+    .then(data=> {
+      res.status(200).send('remove success');
+    })
+    .catch(err=>{
+      res.status(500).send('Internal Server Error.');
+    })
+})
+
+function updatePollById(id, obj, res) {
+  Polls.findById(id, function (err, poll) {
+    if (err) {
+      res.status(404).send("Requested poll not found.");
+    } else {
+      Polls.update({ _id: id }, obj, { upsert: true }, function (err, poll) {
+        if (err) {
+          res.status(500).send("Internal Server Error.");
+        } else {
+          res.status(200).send("Successfull voted");
+        }
+      });
+    }
+  });
+}
 
 function parseJwt(token) {
   let base64Url = token.split('.')[1];
