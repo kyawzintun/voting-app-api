@@ -148,19 +148,45 @@ app.get('/get-polls', (req, res) => {
       .then(docs => {
         res.json(docs);
       });
-})
+});
+
+app.get('/my-polls', isAuthenticated, (req, res) => {
+  let decode = parseJwt(req.headers.token);
+    Polls
+      .find({ userId:decode.id })
+      .sort()
+      .limit()
+      .select({ title: 1 })
+      .then(docs => {
+        res.json(docs);
+      });
+});
+
+app.get('/polls/:pollId', (req, res) => {
+  let pollId = req.params.pollId;
+  Polls
+    .findOne({ _id : pollId })
+    .select({ title: 1, options: 2, userId: 3 })
+    .then(doc => {
+      if (!doc) {
+        res.status(404).json({ error: 'Poll not found' });
+      } else {
+        res.json(doc);
+      }
+    });
+});
 
 app.post('/create-poll', isAuthenticated, function(req, res) {
   let date = new Date();
+  let decode = parseJwt(req.headers.token);
   let pollObj = {
     "title": req.body.title,
     "options": req.body.options,
-    "userId": req.headers.token,
+    "userId": decode.id,
     "ipAddress": null,
     "created": date.toISOString(),
     "updated": date.toISOString()
   }
-  console.log('poll obj ', pollObj);
   insertNewPoll(pollObj).then(inserted => {
     if (!inserted) {
       res.status(500).send('Unknown error');
@@ -168,7 +194,6 @@ app.post('/create-poll', isAuthenticated, function(req, res) {
       res.status(200).send("successfully created new poll");
     }
   })
-  // res.send('POST request to create poll');
 })
 
 function parseJwt(token) {
@@ -181,7 +206,7 @@ function isAuthenticated(req, res, next) {
   let decode = parseJwt(req.headers.token);
   User.findById(decode.id, function (err, user) {
     if (err) {
-      return res.send(401, 'User Not Authenticated');
+      return res.status(401).send("User Not Authenticated");
     } else {
       next();
     }
