@@ -146,19 +146,27 @@ app.get('/get-polls', (req, res) => {
       .limit()
       .select({ title: 1 })
       .then(docs => {
-        res.json(docs);
+        res.status(200).json(docs);
+      })
+      .catch(err => {
+        console.log(err, 'get-polls');
+        res.status(500).send('Internal Server Error.');
       });
 });
 
 app.get('/my-polls', isAuthenticated, (req, res) => {
-  let decode = parseJwt(req.headers.token);
+  let decode = parseJwt(req.headers.token, res);
     Polls
       .find({ userId:decode.id })
       .sort()
       .limit()
       .select({ title: 1 })
       .then(docs => {
-        res.json(docs);
+        res.status(200).json(docs);
+      })
+      .catch(err => {
+        console.log(err, 'my-polls');
+        res.status(500).send('Internal Server Error.');
       });
 });
 
@@ -166,7 +174,7 @@ app.get('/polls/:pollId', (req, res) => {
   let pollId = req.params.pollId;
   Polls
     .findOne({ _id : pollId })
-    .select({ title: 1, options: 2, userId: 3 })
+    .select({ title: 1, options: 2, userId: 3, ipAddress: 4 })
     .then(doc => {
       if (!doc) {
         res.status(404).send('Poll not found');
@@ -181,32 +189,38 @@ app.get('/polls/:pollId', (req, res) => {
 
 app.post('/create-poll', isAuthenticated, function(req, res) {
   let date = new Date();
-  let decode = parseJwt(req.headers.token);
+  let decode = parseJwt(req.headers.token, res);
   let pollObj = {
     "title": req.body.title,
     "options": req.body.options,
     "userId": decode.id,
-    "ipAddress": null,
+    "ipAddress": [],
     "created": date.toISOString(),
     "updated": date.toISOString()
   }
-  insertNewPoll(pollObj).then(inserted => {
+  insertNewPoll(pollObj)
+  .then(inserted => {
     if (!inserted) {
       res.status(500).send('Unknown error');
     } else {
       res.status(200).send("successfully created new poll");
     }
   })
+  .catch(err => {
+    res.status(500).send('Internal Server Error');
+  });
 });
 
 app.put('/vote/:pollId', function (req, res) {
   let pollId = req.params.pollId;
   let options = req.body.options;
+  let ipaddress = req.connection.remoteAddress
   delete req.body._id;
-  updatePollById(pollId, req.body, res);
+  console.log(req.headers.host);
+  updatePollById(pollId, req.body, ipaddress, res);
 })
 
-app.delete('/delete-poll/:pollId', function (req, res) {
+app.delete('/delete-poll/:pollId',isAuthenticated, function (req, res) {
   let pollId = req.params.pollId;
   Polls
     .findOne({ _id : pollId })
@@ -220,30 +234,50 @@ app.delete('/delete-poll/:pollId', function (req, res) {
     })
 })
 
-function updatePollById(id, obj, res) {
+function updatePollById(id, obj, ip, res) {
+  let date = new Date();
   Polls.findById(id, function (err, poll) {
     if (err) {
       res.status(404).send("Requested poll not found.");
     } else {
-      Polls.update({ _id: id }, obj, { upsert: true }, function (err, poll) {
-        if (err) {
-          res.status(500).send("Internal Server Error.");
-        } else {
-          res.status(200).send("Successfull voted");
+      let index = poll.ipAddress !== null ? poll.ipAddress.map((x) => {
+        return x.ip;
+      }).indexOf(ip): -1;
+      if(index === -1) {
+        let ipObj = {
+          "ip": ip,
+          "votedDate": date.toISOString()
+        };
+        if (obj.ipAddress === null) {
+          obj.ipAddress = [];
         }
-      });
+        obj.ipAddress.push(ipObj);
+        Polls.update({ _id: id }, obj, { upsert: true }, function (err, poll) {
+          console.log(poll, 'poll obj');
+          if (err) {
+            res.status(500).send("Internal Server Error.");
+          } else {
+            res.status(200).send("Successfull voted");
+          }
+        });
+      }else {
+        res.status(422).send('You can only vote once a poll.');
+      }
     }
   });
 }
 
-function parseJwt(token) {
-  let base64Url = token.split('.')[1];
-  let base64 = base64Url.replace('-', '+').replace('_', '/');
-  return JSON.parse(Buffer.from(base64, 'base64').toString());
+function parseJwt(token, res) {
+  if(token.length && token.length === 171) {
+    let base64Url = token.split('.')[1];
+    let base64 = base64Url.replace('-', '+').replace('_', '/');
+    return JSON.parse(Buffer.from(base64, 'base64').toString());
+  }
+  return res.status(401).send("User Not Authenticated");
 };
 
 function isAuthenticated(req, res, next) {
-  let decode = parseJwt(req.headers.token);
+  let decode = parseJwt(req.headers.token, res);
   User.findById(decode.id, function (err, user) {
     if (err) {
       return res.status(401).send("User Not Authenticated");

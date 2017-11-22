@@ -25,7 +25,7 @@ module.exports = function() {
     title: { type: String, required: true },
     options: { type: Array, required: true },
     userId: { type: String, required: true },
-    ipAddress: String,
+    ipAddress: Array,
     created: String,
     updated: String
   });
