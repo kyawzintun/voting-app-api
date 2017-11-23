@@ -142,7 +142,7 @@ app.use('/api/v1', router);
 app.get('/get-polls', (req, res) => {
     Polls
       .find()
-      .sort()
+      .sort({ created: -1 })
       .limit()
       .select({ title: 1 })
       .then(docs => {
@@ -158,7 +158,7 @@ app.get('/my-polls', isAuthenticated, (req, res) => {
   let decode = parseJwt(req.headers.token, res);
     Polls
       .find({ userId:decode.id })
-      .sort()
+      .sort({ created: -1 })
       .limit()
       .select({ title: 1 })
       .then(docs => {
@@ -214,7 +214,7 @@ app.post('/create-poll', isAuthenticated, function(req, res) {
 app.put('/vote/:pollId', function (req, res) {
   let pollId = req.params.pollId;
   let options = req.body.options;
-  let ipaddress = req.connection.remoteAddress
+  let ipaddress = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
   delete req.body._id;
   console.log(req.headers.host);
   updatePollById(pollId, req.body, ipaddress, res);
