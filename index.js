@@ -56,7 +56,7 @@ router.route('/auth/twitter/reverse')
     request.post({
       url: 'https://api.twitter.com/oauth/request_token',
       oauth: {
-        oauth_callback: "http%3A%2F%2Flocalhost%3A5000%2Ftwitter-callback",
+        oauth_callback: "https://kyawzintun.github.io/voting-app/twitter-callback",
         consumer_key: twitterConfig.consumerKey,
         consumer_secret: twitterConfig.consumerSecret
       }
@@ -292,4 +292,6 @@ function insertNewPoll(poll) {
   return polls.save();
 }
 
-app.listen(port);
+app.listen(port, ()=>{
+  console.log('app is running on port ', port);
+});
